@@ -67,15 +67,17 @@ async function handleInfo(url, workerOrigin) {
   }
 
   const yt = await getSession();
-  // YouTube returns streaming data for some clients but not others — try in order of reliability
+  // Use a single client to stay under the Workers free-tier CPU budget (10ms).
+  // iOS client is usually the most reliable source of streaming data.
   let info;
-  for (const client of ['IOS', 'ANDROID', 'WEB', 'MWEB', 'TV_EMBEDDED']) {
+  try {
+    info = await yt.getBasicInfo(videoId, 'IOS');
+  } catch (e) {
+    // One fallback only — further attempts risk hitting the CPU limit.
     try {
-      info = await yt.getBasicInfo(videoId, client);
-      const fmtCount = (info.streaming_data?.adaptive_formats?.length ?? 0) + (info.streaming_data?.formats?.length ?? 0);
-      if (fmtCount > 0) break;
+      info = await yt.getBasicInfo(videoId, 'ANDROID');
     } catch {
-      // try next client
+      throw new Error('Could not retrieve video information from YouTube: ' + (e?.message ?? 'unknown'));
     }
   }
   if (!info) throw new Error('Could not retrieve video information from YouTube');

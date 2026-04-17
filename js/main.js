@@ -79,17 +79,7 @@
         throw new Error("The worker URL hasn't been configured yet. Set WORKER_URL in js/config.js.");
       }
 
-      const resp = await fetch(`${WORKER}/info?v=${videoId}`);
-      let data;
-      try {
-        data = await resp.json();
-      } catch {
-        throw new Error(
-          `Worker returned an empty or non-JSON response (HTTP ${resp.status} ${resp.statusText}). ` +
-          `Check that the worker is deployed: ${WORKER}/health`
-        );
-      }
-      if (!resp.ok) throw new Error(data?.error || `Server error ${resp.status}`);
+      const data = await fetchInfoWithRetry(videoId);
 
       videoInfo = data;
       renderVideoMeta(data);
@@ -243,6 +233,38 @@
 
   function hideAll() {
     [videoSection, clipSection, formatSection, downloadSection].forEach(s => s.classList.add('hidden'));
+  }
+
+  // ── Retrying fetch ─────────────────────────────────────────
+  // The worker occasionally hits Cloudflare's CPU limit (error 1102) and
+  // returns a 503 with no CORS headers — surfaces as "Failed to fetch".
+  // Retry a couple of times with backoff; cold-start isolates warm up fast.
+  async function fetchInfoWithRetry(videoId, attempts = 4) {
+    let lastErr;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        const resp = await fetch(`${WORKER}/info?v=${videoId}`);
+        if (resp.status === 503 || resp.status === 502) {
+          lastErr = new Error(`Worker overloaded (HTTP ${resp.status})`);
+        } else {
+          let data;
+          try {
+            data = await resp.json();
+          } catch {
+            throw new Error(`Worker returned non-JSON response (HTTP ${resp.status}).`);
+          }
+          if (!resp.ok) throw new Error(data?.error || `Server error ${resp.status}`);
+          return data;
+        }
+      } catch (err) {
+        lastErr = err;
+        // "Failed to fetch" from a CORS-less 503 lands here too.
+      }
+      if (i < attempts - 1) {
+        await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+      }
+    }
+    throw lastErr || new Error('Could not reach the worker after several retries.');
   }
 
   // ── URL parser ─────────────────────────────────────────────

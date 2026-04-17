@@ -3,7 +3,7 @@
 // Users can also override it in localStorage: localStorage.setItem('workerUrl', 'https://...')
 const WORKER_URL = (
   localStorage.getItem('workerUrl') ||
-  'https://yt-clip-worker.PLACEHOLDER.workers.dev'
+  'https://youtube-clip-downloader.andy-croon.workers.dev/'
 ).replace(/\/$/, '');
 
 window.APP_CONFIG = { WORKER_URL };

@@ -10,6 +10,9 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
     steps:
       - uses: actions/checkout@v4
 
@@ -24,7 +27,39 @@ jobs:
         working-directory: worker
 
       - name: Deploy worker
-        run: npx wrangler deploy
+        id: deploy
+        run: |
+          OUTPUT=$(npx wrangler deploy 2>&1)
+          echo "$OUTPUT"
+          URL=$(echo "$OUTPUT" | grep -oE 'https://[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.workers\.dev' | head -1)
+          if [ -z "$URL" ]; then
+            echo "Could not extract worker URL from wrangler output"
+            exit 1
+          fi
+          echo "url=$URL" >> $GITHUB_OUTPUT
         working-directory: worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Update WORKER_URL in config.js
+        run: |
+          WORKER_URL="${{ steps.deploy.outputs.url }}"
+          node -e "
+            const fs = require('fs');
+            let src = fs.readFileSync('js/config.js', 'utf8');
+            src = src.replace(
+              /(localStorage\.getItem\('workerUrl'\)\s*\|\|\s*')[^']*('),/,
+              \`\$1\${process.env.WORKER_URL}\$2,\`
+            );
+            fs.writeFileSync('js/config.js', src);
+          "
+        env:
+          WORKER_URL: ${{ steps.deploy.outputs.url }}
+
+      - name: Commit updated config.js
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add js/config.js
+          git diff --staged --quiet || git commit -m "chore: set WORKER_URL to ${{ steps.deploy.outputs.url }} [skip ci]"
+          git push

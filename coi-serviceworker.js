@@ -1,33 +1,45 @@
 /**
- * Cleanup script — previous versions registered a service worker to enable
- * cross-origin isolation (for multi-threaded FFmpeg.wasm). That broke the
- * YouTube preview iframe and blocked FFmpeg's own worker script.
- *
- * We now use single-threaded FFmpeg with blob-URL workers, so no SW is
- * needed. This file unregisters any lingering SW registrations from older
- * visits and reloads once, so returning users aren't stuck with a cached SW.
+ * Cleanup script — older versions of this app registered a service worker to
+ * enable cross-origin isolation. That broke the YouTube preview iframe and
+ * FFmpeg's worker loading, so the SW has been removed. This file now only
+ * unregisters any lingering SW, clears its caches, and forces one reload so
+ * returning visitors aren't stuck being served through the stale SW.
  */
-(() => {
+(async () => {
   if (typeof document === 'undefined') {
-    // Running as the old service worker itself — self-unregister on activate.
+    // If this file is ever fetched *as* a service worker (old registrations),
+    // make it immediately self-destruct.
     self.addEventListener('install', () => self.skipWaiting());
     self.addEventListener('activate', (e) => {
-      e.waitUntil(self.registration.unregister().then(() => self.clients.claim()));
+      e.waitUntil((async () => {
+        await self.registration.unregister();
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+        const clients = await self.clients.matchAll();
+        clients.forEach((c) => c.navigate(c.url));
+      })());
     });
     return;
   }
 
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then((regs) => {
-      let hadAny = false;
-      for (const reg of regs) {
-        reg.unregister();
-        hadAny = true;
-      }
-      if (hadAny && !sessionStorage.getItem('coi-cleanup-reloaded')) {
-        sessionStorage.setItem('coi-cleanup-reloaded', '1');
-        location.reload();
-      }
-    });
+  if (!('serviceWorker' in navigator)) return;
+
+  try {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    if (regs.length === 0) return;
+
+    await Promise.all(regs.map((r) => r.unregister()));
+
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+
+    if (!sessionStorage.getItem('coi-cleanup-reloaded')) {
+      sessionStorage.setItem('coi-cleanup-reloaded', '1');
+      location.reload();
+    }
+  } catch (e) {
+    console.warn('[coi-cleanup]', e);
   }
 })();

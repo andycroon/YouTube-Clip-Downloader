@@ -11,16 +11,10 @@ window.Downloader = (() => {
   const FFMPEG_CORE_JS     = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js';
   const FFMPEG_CORE_WASM   = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm';
   const FFMPEG_JS          = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.min.js';
-  const FFMPEG_CLASS_WORKER = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/814.ffmpeg.js';
-
-  // Classic Web Workers must be same-origin. Convert cross-origin scripts to
-  // blob URLs so `new Worker(...)` accepts them.
-  async function toBlobURL(url, mimeType) {
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`Failed to fetch ${url}: ${resp.status}`);
-    const blob = new Blob([await resp.arrayBuffer()], { type: mimeType });
-    return URL.createObjectURL(blob);
-  }
+  // Self-hosted so it's same-origin — classic Workers require this, and
+  // importScripts() from a same-origin worker can then load the core from
+  // the CDN without blob-URL quirks.
+  const FFMPEG_CLASS_WORKER = 'vendor/ffmpeg/814.ffmpeg.js';
 
   // Long-clip warning threshold (10 minutes)
   const LONG_CLIP_MS = 10 * 60 * 1000;
@@ -54,13 +48,11 @@ window.Downloader = (() => {
 
     onProgress?.('Loading FFmpeg…', 8);
 
-    const [classWorkerURL, coreURL, wasmURL] = await Promise.all([
-      toBlobURL(FFMPEG_CLASS_WORKER, 'text/javascript'),
-      toBlobURL(FFMPEG_CORE_JS, 'text/javascript'),
-      toBlobURL(FFMPEG_CORE_WASM, 'application/wasm'),
-    ]);
-
-    await ff.load({ classWorkerURL, coreURL, wasmURL });
+    await ff.load({
+      classWorkerURL: new URL(FFMPEG_CLASS_WORKER, document.baseURI).href,
+      coreURL: FFMPEG_CORE_JS,
+      wasmURL: FFMPEG_CORE_WASM,
+    });
 
     _ffmpeg = ff;
     _ffmpegLoading = false;
@@ -84,7 +76,8 @@ window.Downloader = (() => {
         await pathBC({ format, videoFormats, startMs, endMs, durationMs, title, onProgress, onDone });
       }
     } catch (err) {
-      onError?.(err.message || 'Download failed');
+      console.error('[download]', err);
+      onError?.(err?.message || String(err) || 'Download failed (see console for details)');
     }
   }
 

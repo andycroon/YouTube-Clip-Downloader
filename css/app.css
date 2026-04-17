@@ -374,7 +374,25 @@ body {
 
 .format-btn.selected {
   border-color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-bg));
+  background: var(--color-primary);
+  color: #fff;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+.format-btn.selected .format-btn-label,
+.format-btn.selected .format-btn-meta,
+.format-btn.selected .format-btn-reencode {
+  color: #fff;
+}
+
+.format-btn.selected::after {
+  content: "✓";
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-weight: 700;
+  font-size: .9rem;
+  color: #fff;
 }
 
 .format-btn-label { font-weight: 600; }

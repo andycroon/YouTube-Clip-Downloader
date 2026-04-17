@@ -8,13 +8,12 @@
  *   D — MP3 320kbps (re-encode audio via FFmpeg.wasm libmp3lame)
  */
 window.Downloader = (() => {
-  const FFMPEG_CORE_JS     = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js';
-  const FFMPEG_CORE_WASM   = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm';
-  const FFMPEG_JS          = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.min.js';
-  // Self-hosted so it's same-origin — classic Workers require this, and
-  // importScripts() from a same-origin worker can then load the core from
-  // the CDN without blob-URL quirks.
-  const FFMPEG_CLASS_WORKER = 'vendor/ffmpeg/814.ffmpeg.js';
+  const FFMPEG_CORE_JS   = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js';
+  const FFMPEG_CORE_WASM = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm';
+  // Self-hosted on our origin so FFmpeg's internal Worker construction
+  // (which finds 814.ffmpeg.js next to this file as a classic worker)
+  // doesn't run into cross-origin restrictions.
+  const FFMPEG_JS = 'vendor/ffmpeg/ffmpeg.min.js';
 
   // Long-clip warning threshold (10 minutes)
   const LONG_CLIP_MS = 10 * 60 * 1000;
@@ -49,7 +48,6 @@ window.Downloader = (() => {
     onProgress?.('Loading FFmpeg…', 8);
 
     await ff.load({
-      classWorkerURL: new URL(FFMPEG_CLASS_WORKER, document.baseURI).href,
       coreURL: FFMPEG_CORE_JS,
       wasmURL: FFMPEG_CORE_WASM,
     });

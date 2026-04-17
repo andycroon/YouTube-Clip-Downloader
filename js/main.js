@@ -80,8 +80,16 @@
       }
 
       const resp = await fetch(`${WORKER}/info?v=${videoId}`);
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || `Server error ${resp.status}`);
+      let data;
+      try {
+        data = await resp.json();
+      } catch {
+        throw new Error(
+          `Worker returned an empty or non-JSON response (HTTP ${resp.status} ${resp.statusText}). ` +
+          `Check that the worker is deployed: ${WORKER}/health`
+        );
+      }
+      if (!resp.ok) throw new Error(data?.error || `Server error ${resp.status}`);
 
       videoInfo = data;
       renderVideoMeta(data);

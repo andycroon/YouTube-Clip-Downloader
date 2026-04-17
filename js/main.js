@@ -68,7 +68,7 @@
     const raw = urlInput.value.trim();
     if (!raw) return showError('Please enter a YouTube URL.');
     const videoId = extractVideoId(raw);
-    if (!videoId) return showError('That doesn't look like a valid YouTube URL.');
+    if (!videoId) return showError("That doesn't look like a valid YouTube URL.");
 
     loadBtn.disabled = true;
     loadBtn.textContent = 'Loading…';
@@ -76,7 +76,7 @@
 
     try {
       if (WORKER.includes('PLACEHOLDER')) {
-        throw new Error('The worker URL hasn't been configured yet. Set WORKER_URL in js/config.js.');
+        throw new Error("The worker URL hasn't been configured yet. Set WORKER_URL in js/config.js.");
       }
 
       const resp = await fetch(`${WORKER}/info?v=${videoId}`);

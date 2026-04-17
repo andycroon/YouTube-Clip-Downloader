@@ -78,9 +78,9 @@ window.Downloader = (() => {
       if (isFullVideo && !isMp3) {
         await pathA(format, title, onProgress, onDone);
       } else if (isMp3) {
-        await pathD({ videoFormats, startMs, endMs, title, onProgress, onDone });
+        await pathD({ videoFormats, startMs, endMs, durationMs, title, onProgress, onDone });
       } else {
-        await pathBC({ format, videoFormats, startMs, endMs, title, onProgress, onDone });
+        await pathBC({ format, videoFormats, startMs, endMs, durationMs, title, onProgress, onDone });
       }
     } catch (err) {
       onError?.(err.message || 'Download failed');
@@ -101,9 +101,8 @@ window.Downloader = (() => {
   }
 
   // Path B/C — clip a segment
-  async function pathBC({ format, videoFormats, startMs, endMs, title, onProgress, onDone }) {
+  async function pathBC({ format, videoFormats, startMs, endMs, durationMs, title, onProgress, onDone }) {
     const clipSec = (endMs - startMs) / 1000;
-    const totalSec = endMs / 1000; // approx end position in file
 
     window._ffmpegDurationSec = clipSec;
 
@@ -117,15 +116,13 @@ window.Downloader = (() => {
     }
 
     onProgress?.('Fetching video…', 15);
-    const videoBytes = await fetchRange(format.url, startMs, endMs, format.filesize);
+    const videoBytes = await fetchRange(format.url, startMs, endMs, durationMs, format.filesize);
 
     let audioBytes = null;
     if (audioFormat) {
       onProgress?.('Fetching audio…', 25);
-      audioBytes = await fetchRange(audioFormat.url, startMs, endMs, audioFormat.filesize);
+      audioBytes = await fetchRange(audioFormat.url, startMs, endMs, durationMs, audioFormat.filesize);
     }
-
-    const { fetchUtils } = await import('./adapters/_interface.js').catch(() => ({ fetchUtils: null }));
 
     // Write to FFmpeg virtual FS
     await ff.writeFile('input_v' , new Uint8Array(videoBytes));
@@ -178,7 +175,7 @@ window.Downloader = (() => {
   }
 
   // Path D — MP3 320kbps
-  async function pathD({ videoFormats, startMs, endMs, title, onProgress, onDone }) {
+  async function pathD({ videoFormats, startMs, endMs, durationMs, title, onProgress, onDone }) {
     const clipSec = (endMs - startMs) / 1000;
     window._ffmpegDurationSec = clipSec;
 
@@ -188,7 +185,7 @@ window.Downloader = (() => {
     const ff = await loadFFmpeg((msg, pct) => onProgress?.(msg, pct));
 
     onProgress?.('Fetching audio…', 20);
-    const bytes = await fetchRange(audioFmt.url, startMs, endMs, audioFmt.filesize);
+    const bytes = await fetchRange(audioFmt.url, startMs, endMs, durationMs, audioFmt.filesize);
     await ff.writeFile('input_a', new Uint8Array(bytes));
 
     onProgress?.('Encoding MP3…', 45);
@@ -211,23 +208,18 @@ window.Downloader = (() => {
 
   /**
    * Range-fetch a portion of a stream.
-   * Estimates the byte range from known file size; adds padding for keyframe alignment.
+   * Estimates the byte range from known file size assuming roughly even bitrate.
    */
-  async function fetchRange(url, startMs, endMs, fileSizeBytes) {
-    // If no filesize, fetch the whole thing
-    if (!fileSizeBytes) {
+  async function fetchRange(url, startMs, endMs, durationMs, fileSizeBytes) {
+    if (!fileSizeBytes || !durationMs) {
       const r = await fetch(url);
       if (!r.ok) throw new Error(`Fetch failed: ${r.status}`);
       return r.arrayBuffer();
     }
 
-    // Estimate byte range with generous padding (300KB each side = covers most keyframe intervals)
     const PADDING = 512 * 1024;
-    // Use content-length from a HEAD to get the actual total size
-    let totalSize = fileSizeBytes;
-
-    const startByte = Math.max(0, Math.floor((startMs / (endMs + 5000)) * totalSize) - PADDING);
-    const endByte   = Math.min(totalSize - 1, Math.ceil((endMs / (endMs + 5000)) * totalSize) + PADDING);
+    const startByte = Math.max(0, Math.floor((startMs / durationMs) * fileSizeBytes) - PADDING);
+    const endByte   = Math.min(fileSizeBytes - 1, Math.ceil((endMs / durationMs) * fileSizeBytes) + PADDING);
 
     const r = await fetch(url, { headers: { Range: `bytes=${startByte}-${endByte}` } });
     if (!r.ok && r.status !== 206) throw new Error(`Fetch failed: ${r.status}`);

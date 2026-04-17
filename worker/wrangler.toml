@@ -1,4 +1,4 @@
-name = "yt-clip-worker"
+name = "youtube-clip-downloader"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]

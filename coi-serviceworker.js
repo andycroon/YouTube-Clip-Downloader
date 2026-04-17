@@ -25,10 +25,18 @@
 
   // Running in the page — register the SW if needed
   if (!window.crossOriginIsolated && 'serviceWorker' in navigator) {
+    // Guard against infinite reload loops: only reload once per session.
+    const reloaded = sessionStorage.getItem('coi-reloaded');
     navigator.serviceWorker.register(document.currentScript.src).then(reg => {
-      if (reg.installing || reg.waiting) {
-        // A new SW was installed — reload to activate it
-        location.reload();
+      const sw = reg.installing || reg.waiting;
+      if (sw && !reloaded) {
+        // Wait for the SW to activate before reloading so it can intercept the navigation.
+        sw.addEventListener('statechange', function () {
+          if (this.state === 'activated') {
+            sessionStorage.setItem('coi-reloaded', '1');
+            location.reload();
+          }
+        });
       }
     });
   }

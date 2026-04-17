@@ -105,7 +105,8 @@
       formatSection.classList.remove('hidden');
       downloadSection.classList.remove('hidden');
     } catch (err) {
-      showError(err.message);
+      console.error('[loadVideo]', err);
+      showError(err?.message || String(err) || 'An unexpected error occurred loading the video.');
     } finally {
       loadBtn.disabled = false;
       loadBtn.textContent = 'Load';

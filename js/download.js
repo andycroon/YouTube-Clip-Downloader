@@ -8,12 +8,19 @@
  *   D — MP3 320kbps (re-encode audio via FFmpeg.wasm libmp3lame)
  */
 window.Downloader = (() => {
-  const FFMPEG_CORE_CDN  = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js';
-  const FFMPEG_CORE_MT   = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.6/dist/umd/ffmpeg-core.js';
-  const FFMPEG_WORKER_MT = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.6/dist/umd/ffmpeg-core.worker.js';
-  const FFMPEG_WASM_MT   = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.6/dist/umd/ffmpeg-core.wasm';
-  const FFMPEG_WASM_ST   = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm';
-  const FFMPEG_JS        = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.min.js';
+  const FFMPEG_CORE_JS     = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js';
+  const FFMPEG_CORE_WASM   = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm';
+  const FFMPEG_JS          = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.min.js';
+  const FFMPEG_CLASS_WORKER = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/814.ffmpeg.js';
+
+  // Classic Web Workers must be same-origin. Convert cross-origin scripts to
+  // blob URLs so `new Worker(...)` accepts them.
+  async function toBlobURL(url, mimeType) {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`Failed to fetch ${url}: ${resp.status}`);
+    const blob = new Blob([await resp.arrayBuffer()], { type: mimeType });
+    return URL.createObjectURL(blob);
+  }
 
   // Long-clip warning threshold (10 minutes)
   const LONG_CLIP_MS = 10 * 60 * 1000;
@@ -47,19 +54,13 @@ window.Downloader = (() => {
 
     onProgress?.('Loading FFmpeg…', 8);
 
-    const useMT = typeof SharedArrayBuffer !== 'undefined';
-    if (useMT) {
-      await ff.load({
-        coreURL: FFMPEG_CORE_MT,
-        wasmURL: FFMPEG_WASM_MT,
-        workerURL: FFMPEG_WORKER_MT,
-      });
-    } else {
-      await ff.load({
-        coreURL: FFMPEG_CORE_CDN,
-        wasmURL: FFMPEG_WASM_ST,
-      });
-    }
+    const [classWorkerURL, coreURL, wasmURL] = await Promise.all([
+      toBlobURL(FFMPEG_CLASS_WORKER, 'text/javascript'),
+      toBlobURL(FFMPEG_CORE_JS, 'text/javascript'),
+      toBlobURL(FFMPEG_CORE_WASM, 'application/wasm'),
+    ]);
+
+    await ff.load({ classWorkerURL, coreURL, wasmURL });
 
     _ffmpeg = ff;
     _ffmpegLoading = false;

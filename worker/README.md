@@ -39,7 +39,7 @@ Published yt-clip-worker (0.50 sec)
   https://yt-clip-worker.<your-subdomain>.workers.dev
 ```
 
-Copy that URL and send it to the site owner. They plug it into the frontend config and the app is live.
+The GitHub Actions workflow (`.github/workflows/deploy-worker.yml`) runs this automatically on every push to `main` and updates `js/config.js` with the correct URL — no manual step needed.
 
 ---
 

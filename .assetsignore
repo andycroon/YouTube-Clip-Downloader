@@ -1,0 +1,11 @@
+worker/
+.github/
+node_modules/
+PLAN.md
+CLAUDE.md
+README.md
+wrangler.toml
+.assetsignore
+*.bat
+.git/
+.gitignore
